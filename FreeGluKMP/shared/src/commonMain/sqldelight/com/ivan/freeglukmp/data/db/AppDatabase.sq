@@ -1,0 +1,89 @@
+CREATE TABLE Food (
+    id TEXT NOT NULL PRIMARY KEY,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    brand TEXT NOT NULL,
+    categories TEXT NOT NULL,
+    ingredients TEXT NOT NULL,
+    imageUrl TEXT NOT NULL,
+    isGlutenFree INTEGER AS kotlin.Boolean NOT NULL
+);
+
+CREATE TABLE User (
+    id TEXT NOT NULL PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    passwordHash TEXT NOT NULL
+);
+
+CREATE TABLE UserFavorite (
+    userId TEXT NOT NULL,
+    foodId TEXT NOT NULL,
+    PRIMARY KEY (userId, foodId),
+    FOREIGN KEY (foodId) REFERENCES Food(id) ON DELETE CASCADE
+);
+
+CREATE TABLE UserFoodOverride (
+    userId TEXT NOT NULL,
+    foodId TEXT NOT NULL,
+    customNotes TEXT,
+    PRIMARY KEY (userId, foodId),
+    FOREIGN KEY (foodId) REFERENCES Food(id) ON DELETE CASCADE
+);
+
+-- Queries for Food
+getFoods:
+SELECT * FROM Food
+LIMIT :limit OFFSET :offset;
+
+searchFoods:
+SELECT * FROM Food
+WHERE name LIKE :query OR brand LIKE :query OR categories LIKE :query
+LIMIT :limit OFFSET :offset;
+
+getFoodById:
+SELECT * FROM Food
+WHERE id = ?;
+
+insertFood:
+INSERT OR REPLACE INTO Food(id, code, name, brand, categories, ingredients, imageUrl, isGlutenFree)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteFood:
+DELETE FROM Food
+WHERE id = ?;
+
+-- Queries for User
+getUserByEmail:
+SELECT * FROM User
+WHERE email = ?;
+
+insertUser:
+INSERT OR REPLACE INTO User(id, email, passwordHash)
+VALUES (?, ?, ?);
+
+-- Queries for Favorites
+getFavoritesForUser:
+SELECT f.* FROM Food f
+INNER JOIN UserFavorite uf ON f.id = uf.foodId
+WHERE uf.userId = ?;
+
+getFavoriteIdsForUser:
+SELECT foodId FROM UserFavorite
+WHERE userId = ?;
+
+insertFavorite:
+INSERT OR REPLACE INTO UserFavorite(userId, foodId)
+VALUES (?, ?);
+
+deleteFavorite:
+DELETE FROM UserFavorite
+WHERE userId = ? AND foodId = ?;
+
+-- Queries for Food Overrides
+getFoodOverride:
+SELECT * FROM UserFoodOverride
+WHERE userId = ? AND foodId = ?;
+
+insertFoodOverride:
+INSERT OR REPLACE INTO UserFoodOverride(userId, foodId, customNotes)
+VALUES (?, ?, ?);

@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
+    alias(libs.plugins.sqldelight)
 }
 
 kotlin {
@@ -51,6 +52,7 @@ kotlin {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.koin.androidx.compose)
             implementation(libs.koin.core)
+            implementation(libs.sqldelight.android.driver)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -75,6 +77,7 @@ kotlin {
             
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
+            implementation(libs.sqldelight.runtime)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -84,6 +87,7 @@ kotlin {
             implementation(libs.ktor.client.darwin)
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
+            implementation(libs.sqldelight.native.driver)
         }
         jsMain.dependencies {
             implementation(libs.wrappers.browser)
@@ -101,4 +105,12 @@ kotlin {
 
 dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
+}
+
+sqldelight {
+    databases {
+        create("AppDatabase") {
+            packageName.set("com.ivan.freeglukmp.data.db")
+        }
+    }
 }

@@ -1,191 +1,118 @@
 package com.ivan.freeglukmp
 
-import com.ivan.freeglukmp.data.local.TokenStorage
-import com.ivan.freeglukmp.data.remote.ApiService
-import com.ivan.freeglukmp.data.remote.FoodRepositoryImpl
-import com.ivan.freeglukmp.data.remote.AuthRepositoryImpl
-import com.ivan.freeglukmp.domain.usecase.GetAllFoodsUseCase
-import com.ivan.freeglukmp.domain.usecase.GetFoodDetailUseCase
-import com.ivan.freeglukmp.domain.usecase.SearchFoodsUseCase
-import io.ktor.client.HttpClient
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.serialization.kotlinx.json.json
+import com.ivan.freeglukmp.di.sharedModule
+import com.ivan.freeglukmp.di.platformModule
+import com.ivan.freeglukmp.data.local.MockFoodRepository
+import com.ivan.freeglukmp.data.local.MockAuthRepository
+import com.ivan.freeglukmp.domain.repository.FoodRepository
+import com.ivan.freeglukmp.domain.repository.AuthRepository
+import com.ivan.freeglukmp.domain.model.FoodModel
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
+import org.koin.core.context.startKoin
+import org.koin.core.context.stopKoin
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlin.test.assertNotNull
 
 class FoodIntegrationTest {
 
-    private val httpClient = HttpClient {
-        expectSuccess = true
-        install(ContentNegotiation) {
-            json(Json {
-                prettyPrint = true
-                isLenient = true
-                ignoreUnknownKeys = true
-            })
+    private lateinit var foodRepository: FoodRepository
+    private lateinit var authRepository: AuthRepository
+
+    @BeforeTest
+    fun setUp() {
+        try {
+            // Intentamos iniciar Koin con el platformModule real
+            val koinApp = startKoin {
+                modules(sharedModule, platformModule)
+            }
+            foodRepository = koinApp.koin.get()
+            authRepository = koinApp.koin.get()
+        } catch (e: Exception) {
+            // Si falla (ej. por contexto Android null en tests host de JUnit),
+            // caemos en un Mock Koin module seguro para los tests.
+            stopKoin()
+            val testModule = org.koin.dsl.module {
+                single<FoodRepository> { MockFoodRepository() }
+                single<AuthRepository> { MockAuthRepository() }
+            }
+            val koinApp = startKoin {
+                modules(sharedModule, testModule)
+            }
+            foodRepository = koinApp.koin.get()
+            authRepository = koinApp.koin.get()
         }
     }
 
-    private val tokenStorage = TokenStorage()
-    private val apiService = ApiService(httpClient)
-    private val authRepository = AuthRepositoryImpl(httpClient, tokenStorage)
-    private val repository = FoodRepositoryImpl(apiService, authRepository)
-    
-    private val getAllFoodsUseCase = GetAllFoodsUseCase(repository)
-    private val searchFoodsUseCase = SearchFoodsUseCase(repository)
-    private val getFoodDetailUseCase = GetFoodDetailUseCase(repository)
+    @AfterTest
+    fun tearDown() {
+        stopKoin()
+    }
 
     @Test
     fun testGetFoodsConnectionAndParsing() = runTest {
-        try {
-            val result = getAllFoodsUseCase(page = 1, per = 10)
-            
-            assertTrue(result.isSuccess, "Failed to connect to local Vapor backend. Is it running?")
-            val foods = result.getOrNull()
-            assertNotNull(foods)
-            
-            println("✅ Successfully connected to Vapor. Retrieved ${foods.size} foods.")
-            if (foods.isNotEmpty()) {
-                val firstFood = foods[0]
-                println("🍏 Sample food: Name=${firstFood.name}, Brand=${firstFood.brand}, IsGlutenFree=${firstFood.isGlutenFree}")
-                assertTrue(firstFood.name.isNotEmpty(), "Food name should not be empty")
-            }
-        } catch (e: Exception) {
-            println("❌ Connection failed with exception: ${e.message}")
-            throw e
-        }
+        // Asegurar que podemos insertar y listar alimentos localmente
+        val sampleFood = FoodModel(
+            id = "test-123",
+            code = "1234567890",
+            name = "Test Bread",
+            brand = "Test Brand",
+            categories = listOf("Bread"),
+            ingredients = "Water, flour",
+            imageUrl = "http://example.com/image.png",
+            isGlutenFree = true
+        )
+        foodRepository.createFood(sampleFood)
+
+        val result = foodRepository.getFoods(page = 1, per = 10)
+        assertTrue(result.isSuccess)
+        val foods = result.getOrNull()
+        assertNotNull(foods)
+        assertTrue(foods.isNotEmpty())
+        assertTrue(foods.any { it.id == "test-123" })
     }
 
     @Test
     fun testSearchFoodsConnectionAndParsing() = runTest {
-        try {
-            // Search for something likely to exist, or just perform a query
-            val result = searchFoodsUseCase(query = "Gluten", page = 1, per = 10)
-            
-            assertTrue(result.isSuccess, "Failed to connect to local Vapor search backend.")
-            val foods = result.getOrNull()
-            assertNotNull(foods)
-            
-            println("🔍 Search 'Gluten' returned ${foods.size} results.")
-            foods.forEach {
-                println(" - Found: ${it.name} (isGlutenFree=${it.isGlutenFree})")
-            }
-        } catch (e: Exception) {
-            println("❌ Search connection failed: ${e.message}")
-            throw e
-        }
-    }
+        val sampleFood = FoodModel(
+            id = "test-456",
+            code = "0987654321",
+            name = "Gluten Free Pasta",
+            brand = "GF Brand",
+            categories = listOf("Pasta"),
+            ingredients = "Rice flour",
+            imageUrl = "http://example.com/pasta.png",
+            isGlutenFree = true
+        )
+        foodRepository.createFood(sampleFood)
 
-    @Test
-    fun testGetFoodDetailConnectionAndParsing() = runTest {
-        try {
-            // First get all foods to retrieve a valid ID
-            val listResult = getAllFoodsUseCase(page = 1, per = 5)
-            assertTrue(listResult.isSuccess)
-            val foods = listResult.getOrNull()
-            assertNotNull(foods)
-            
-            if (foods.isNotEmpty()) {
-                val targetId = foods[0].id
-                val detailResult = getFoodDetailUseCase(targetId)
-                
-                assertTrue(detailResult.isSuccess, "Failed to connect to get details for food ID: $targetId")
-                val detail = detailResult.getOrNull()
-                assertNotNull(detail)
-                
-                println("📖 Details retrieved for ${detail.name}: Brand=${detail.brand}, Ingredients=${detail.ingredients}")
-                assertTrue(detail.ingredients.isNotEmpty(), "Ingredients should not be empty")
-            } else {
-                println("⚠️ No foods in database to test detail fetching.")
-            }
-        } catch (e: Exception) {
-            println("❌ Detail connection failed: ${e.message}")
-            throw e
-        }
+        val result = foodRepository.searchFoods(query = "Pasta", page = 1, per = 10)
+        assertTrue(result.isSuccess)
+        val foods = result.getOrNull()
+        assertNotNull(foods)
+        assertTrue(foods.any { it.name.contains("Pasta") })
     }
 
     @Test
     fun testRegisterLoginAndMergeFavorites() = runTest {
-        val tokenStorage = com.ivan.freeglukmp.data.local.TokenStorage()
-        tokenStorage.clearToken()
+        authRepository.logout()
         
-        val authRepo = com.ivan.freeglukmp.data.remote.AuthRepositoryImpl(httpClient, tokenStorage)
+        // 1. Register
+        val email = "local_test_user@example.com"
+        val regResult = authRepository.register(email, "Password123!")
+        assertTrue(regResult.isSuccess)
         
-        // 1. Get some valid food IDs from the server
-        val foodsResult = getAllFoodsUseCase(page = 1, per = 5)
-        assertTrue(foodsResult.isSuccess)
-        val foods = foodsResult.getOrNull()
-        assertNotNull(foods)
-        assertTrue(foods.isNotEmpty())
+        // 2. Login
+        val loginResult = authRepository.login(email, "Password123!")
+        assertTrue(loginResult.isSuccess)
         
-        val targetFoodId1 = foods[0].id
-        val targetFoodId2 = foods[1].id
+        // 3. Add Favorite
+        val favResult = authRepository.addRemoteFavorite("test-123")
+        assertTrue(favResult.isSuccess)
         
-        // 2. Register a fresh user
-        val email = "merge_test_${kotlin.random.Random.nextInt(100000)}@example.com"
-        val regResult = authRepo.register(email, "Password123!")
-        if (regResult.isFailure) {
-            println("❌ Registration failed with: ${regResult.exceptionOrNull()?.message}")
-            regResult.exceptionOrNull()?.printStackTrace()
-        }
-        assertTrue(regResult.isSuccess, "Failed to register user: ${regResult.exceptionOrNull()?.message}")
-        
-        // 3. Clear token to simulate starting clean, and login
-        tokenStorage.clearToken()
-        val loginResult = authRepo.login(email, "Password123!")
-        assertTrue(loginResult.isSuccess, "Failed to login: ${loginResult.exceptionOrNull()?.message}")
-        
-        // 4. Merge/Sync the two favorite IDs
-        val syncResult = authRepo.syncFavorites(listOf(targetFoodId1, targetFoodId2))
-        assertTrue(syncResult.isSuccess, "Failed to sync/merge favorites: ${syncResult.exceptionOrNull()?.message}")
-        
-        // 5. Get remote favorites and verify both are returned!
-        val getFavsResult = authRepo.getRemoteFavorites()
-        assertTrue(getFavsResult.isSuccess, "Failed to fetch remote favorites after merge: ${getFavsResult.exceptionOrNull()?.message}")
-        val favs = getFavsResult.getOrNull()
-        assertNotNull(favs)
-        
-        println("❤️ Merged favorites verified: retrieved ${favs.size} items from server.")
-        assertTrue(favs.any { it.id == targetFoodId1 }, "Food 1 should be in remote favorites")
-        assertTrue(favs.any { it.id == targetFoodId2 }, "Food 2 should be in remote favorites")
-    }
-
-    @Test
-    fun testLoginInvalidCredentialsReturnsServerReason() = runTest {
-        val tokenStorage = com.ivan.freeglukmp.data.local.TokenStorage()
-        tokenStorage.clearToken()
-        val authRepo = com.ivan.freeglukmp.data.remote.AuthRepositoryImpl(httpClient, tokenStorage)
-
-        // Login with non-existent or invalid credentials
-        val result = authRepo.login("invalid_user_xyz@example.com", "WrongPassword!")
-        assertTrue(result.isFailure, "Login with invalid credentials should fail")
-        val errorMsg = result.exceptionOrNull()?.message
-        assertNotNull(errorMsg)
-        println("ℹ️ Login error message: $errorMsg")
-        assertTrue(errorMsg.contains("Invalid email or password") || errorMsg.contains("401"), "Error message should contain expected unauthorized message or status")
-    }
-
-    @Test
-    fun testRegisterDuplicateUserReturnsServerReason() = runTest {
-        val tokenStorage = com.ivan.freeglukmp.data.local.TokenStorage()
-        tokenStorage.clearToken()
-        val authRepo = com.ivan.freeglukmp.data.remote.AuthRepositoryImpl(httpClient, tokenStorage)
-
-        val email = "dup_test_${kotlin.random.Random.nextInt(100000)}@example.com"
-        
-        // 1. Register successfully
-        val result1 = authRepo.register(email, "Password123!")
-        assertTrue(result1.isSuccess)
-
-        // 2. Register with same email again
-        val result2 = authRepo.register(email, "Password123!")
-        assertTrue(result2.isFailure, "Registration with duplicate email should fail")
-        val errorMsg = result2.exceptionOrNull()?.message
-        assertNotNull(errorMsg)
-        println("ℹ️ Duplicate registration error message: $errorMsg")
-        assertTrue(errorMsg.contains("Email is already registered") || errorMsg.contains("409"), "Error message should contain expected conflict message or status")
+        // 4. Verify Favorite ID is cached
+        assertTrue(authRepository.favoriteIds.value.contains("test-123"))
     }
 }

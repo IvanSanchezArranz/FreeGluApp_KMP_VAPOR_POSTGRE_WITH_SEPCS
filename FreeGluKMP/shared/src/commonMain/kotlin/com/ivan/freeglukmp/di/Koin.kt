@@ -2,9 +2,8 @@ package com.ivan.freeglukmp.di
 
 import com.ivan.freeglukmp.data.local.LocalFavoritesDataSource
 import com.ivan.freeglukmp.data.local.TokenStorage
-import com.ivan.freeglukmp.data.remote.ApiService
-import com.ivan.freeglukmp.data.remote.FoodRepositoryImpl
 import com.ivan.freeglukmp.domain.repository.FoodRepository
+import com.ivan.freeglukmp.domain.repository.AuthRepository
 import com.ivan.freeglukmp.domain.usecase.*
 import com.ivan.freeglukmp.presentation.list.*
 import com.ivan.freeglukmp.presentation.detail.*
@@ -14,6 +13,8 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.koin.core.module.Module
 import org.koin.dsl.module
+
+expect val platformModule: Module
 
 val sharedModule = module {
     single {
@@ -29,11 +30,8 @@ val sharedModule = module {
         }
     }
     
-    single { ApiService(get()) }
-    single<FoodRepository> { FoodRepositoryImpl(get(), get()) }
     single { LocalFavoritesDataSource() }
     single { TokenStorage() }
-    single<com.ivan.freeglukmp.domain.repository.AuthRepository> { com.ivan.freeglukmp.data.remote.AuthRepositoryImpl(get(), get()) }
     
     factory { GetAllFoodsUseCase(get()) }
     factory { SearchFoodsUseCase(get()) }
@@ -50,6 +48,6 @@ val sharedModule = module {
 
 fun initKoin(appModule: Module = module { }) {
     org.koin.core.context.startKoin {
-        modules(sharedModule, appModule)
+        modules(sharedModule, platformModule, appModule)
     }
 }

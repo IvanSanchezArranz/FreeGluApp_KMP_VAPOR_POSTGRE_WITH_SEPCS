@@ -1,11 +1,16 @@
 package com.ivan.freeglukmp
 
 import com.ivan.freeglukmp.di.sharedModule
+import com.ivan.freeglukmp.data.local.MockFoodRepository
+import com.ivan.freeglukmp.data.local.MockAuthRepository
+import com.ivan.freeglukmp.domain.repository.FoodRepository
+import com.ivan.freeglukmp.domain.repository.AuthRepository
 import com.ivan.freeglukmp.presentation.list.FoodsListViewModel
 import com.ivan.freeglukmp.presentation.detail.AddEditFoodViewModel
 import com.ivan.freeglukmp.presentation.detail.AddEditFoodState
 import org.koin.core.context.stopKoin
 import org.koin.dsl.koinApplication
+import org.koin.dsl.module
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,6 +19,11 @@ import kotlin.test.assertTrue
 
 class SharedCommonTest {
 
+    private val testModule = module {
+        single<FoodRepository> { MockFoodRepository() }
+        single<AuthRepository> { MockAuthRepository() }
+    }
+
     @AfterTest
     fun tearDown() {
         stopKoin()
@@ -21,9 +31,9 @@ class SharedCommonTest {
 
     @Test
     fun testFoodsListViewModelIsRegisteredAsSingle() {
-        // Create a local Koin application with our sharedModule
+        // Create a local Koin application with our sharedModule and testModule
         val koinApp = koinApplication {
-            modules(sharedModule)
+            modules(sharedModule, testModule)
         }
         
         val koin = koinApp.koin
@@ -39,7 +49,7 @@ class SharedCommonTest {
     @Test
     fun testFoodsListViewModelPreservesSelectedCategoryAndScrollState() {
         val koinApp = koinApplication {
-            modules(sharedModule)
+            modules(sharedModule, testModule)
         }
         val koin = koinApp.koin
         val vm = koin.get<FoodsListViewModel>()
@@ -60,7 +70,7 @@ class SharedCommonTest {
     @Test
     fun testAddEditFoodViewModelStrictValidations() {
         val koinApp = koinApplication {
-            modules(sharedModule)
+            modules(sharedModule, testModule)
         }
         val koin = koinApp.koin
         val vm = koin.get<AddEditFoodViewModel>()
