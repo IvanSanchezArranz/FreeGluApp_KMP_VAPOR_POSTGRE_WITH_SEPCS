@@ -18,7 +18,17 @@ actual class DatabaseDriverFactory actual constructor() {
         val documentsDirectory = paths.first() as String
         val destinationPath = "$documentsDirectory/$databaseName"
 
-        if (!fileManager.fileExistsAtPath(destinationPath)) {
+        var shouldCopy = !fileManager.fileExistsAtPath(destinationPath)
+        if (!shouldCopy) {
+            val attributes = fileManager.attributesOfItemAtPath(destinationPath, null)
+            val fileSize = attributes?.get(platform.Foundation.NSFileSize) as? Long ?: 0L
+            if (fileSize == 0L) {
+                shouldCopy = true
+                fileManager.removeItemAtPath(destinationPath, null)
+            }
+        }
+
+        if (shouldCopy) {
             val bundlePath = NSBundle.mainBundle.pathForResource("freeglu", "db")
             if (bundlePath != null) {
                 try {

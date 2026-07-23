@@ -12,7 +12,7 @@ actual class DatabaseDriverFactory actual constructor() {
         val databaseName = "freeglu.db"
         val dbFile = context.getDatabasePath(databaseName)
 
-        if (!dbFile.exists()) {
+        if (!dbFile.exists() || dbFile.length() == 0L) {
             try {
                 dbFile.parentFile?.mkdirs()
                 context.assets.open(databaseName).use { inputStream ->
